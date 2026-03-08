@@ -1,0 +1,195 @@
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", "Outfit", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --color-background: #e6f0ff;
+  --color-foreground: #44474b;
+
+  --color-primary: #4a90e2;
+  --color-secondary: #ff2d55;
+}
+
+:root {
+  --background: #e6f0ff;
+  --foreground: #44474b;
+
+  --primary: #4a90e2;
+  --secondary: #ff2d55;
+  --muted: #a3b1c6;
+
+  --neu-bg: #e6f0ff;
+  --neu-light: #ffffff;
+  --neu-shadow: #c9d5e6;
+
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--neu-bg);
+    color: var(--foreground);
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior-y: contain;
+  }
+
+  .neu-extruded {
+    background: var(--neu-bg);
+    box-shadow: 8px 8px 16px var(--neu-shadow),
+      -8px -8px 16px var(--neu-light);
+    border: none;
+  }
+
+  .neu-extruded-sm {
+    background: var(--neu-bg);
+    box-shadow: 4px 4px 8px var(--neu-shadow),
+      -4px -4px 8px var(--neu-light);
+    border: none;
+  }
+
+  .neu-inset {
+    background: var(--neu-bg);
+    box-shadow: inset 6px 6px 12px var(--neu-shadow),
+      inset -6px -6px 12px var(--neu-light);
+    border: none;
+  }
+
+  .neu-pressed {
+    background: var(--neu-bg);
+    box-shadow: inset 3px 3px 6px var(--neu-shadow),
+      inset -3px -3px 6px var(--neu-light);
+    border: none;
+  }
+
+  .neu-nav {
+    background: var(--neu-bg);
+    box-shadow: 0 -5px 20px rgba(163, 177, 198, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  /* 飲水進度條重構樣式 (採用 SVG 方案) */
+  .water-container {
+    overflow: hidden !important;
+    background: #ffffff;
+    position: relative;
+    isolation: isolate;
+  }
+
+  .svg-waves {
+    position: absolute;
+    width: 200%;
+    /* 大於容器寬度以容納位移 */
+    height: 100%;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+  }
+
+  .wave-layer {
+    transform-origin: center bottom;
+  }
+
+  /* 垂直漸層漸變 (底部深 -> 波浪頂部淺) */
+  .water-gradient-fill {
+    fill: url(#waterGradient);
+  }
+
+  /* 自定義捲軸 */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--neu-shadow);
+    border-radius: 10px;
+  }
+
+  /* ============================================================
+     流體波浪動畫系統 (純 CSS，GPU 加速)
+     ============================================================ */
+
+  @keyframes wave-anim {
+    0% {
+      transform: translateX(0);
+    }
+
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes wave-anim2 {
+    0% {
+      transform: translateX(-50%);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  /* 氣泡上升 */
+  @keyframes bubble-rise {
+    0% {
+      transform: translateY(0) scale(1);
+      opacity: 0;
+    }
+
+    10% {
+      opacity: 0.55;
+    }
+
+    80% {
+      opacity: 0.3;
+    }
+
+    100% {
+      transform: translateY(-120px) scale(1.3);
+      opacity: 0;
+    }
+  }
+
+  .bubble {
+    position: absolute;
+    bottom: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    animation: bubble-rise linear infinite;
+    will-change: transform, opacity;
+  }
+
+  /* 水位淡入高度過渡 */
+  .water-fill-layer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    transition: height 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    will-change: height;
+  }
+
+  /* 波浪軌道：寬度 200% 讓兩段波浪無縫銜接 */
+  .wave-track {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 200%;
+    height: 32px;
+    will-change: transform;
+  }
+
+  .wave-track-1 {
+    animation: wave-anim 3.5s linear infinite;
+  }
+
+  .wave-track-2 {
+    animation: wave-anim2 5s linear infinite;
+  }
+}

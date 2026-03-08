@@ -1,0 +1,636 @@
+﻿import { useState, useEffect } from "react";
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, startOfDay, differenceInDays } from "date-fns";
+import { ChevronLeft, ChevronRight, Droplets, History, Settings, ClipboardList, X } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { motion, AnimatePresence } from "motion/react";
+
+export function CalendarInsights() {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // ?豢?????甇?  const [water, setWater] = useState(() => Number(localStorage.getItem("today_water") || 0));
+  const [waterGoal] = useState(() => Number(localStorage.getItem("water_goal") || 2000));
+
+  const [periodSettings, setPeriodSettings] = useState(() => {
+    const saved = localStorage.getItem("period_settings");
+    return saved ? JSON.parse(saved) : { cycleLength: 28, periodLength: 5 };
+  });
+
+  const [periodRecords, setPeriodRecords] = useState<string[]>(() => {
+    const saved = localStorage.getItem("period_records");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [dayDetail, setDayDetail] = useState<string[]>([]);
+
+  useEffect(() => localStorage.setItem("period_records", JSON.stringify(periodRecords)), [periodRecords]);
+  useEffect(() => localStorage.setItem("period_settings", JSON.stringify(periodSettings)), [periodSettings]);
+
+  // 儲存過去的預測，避免重新計算時丟失已發生的預測，並用於顯示歷史預測
+  const [pastPredictions, setPastPredictions] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem("period_past_predictions");
+    return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+  });
+
+  // 將預測日期儲存到 localStorage，以便下次載入時使用
+  const savePastPredictions = (predictions: Set<string>) => {
+    if (predictions.size === 0) return;
+    setPastPredictions(prev => {
+      const updated = new Set<string>(prev);
+      predictions.forEach(d => updated.add(d));
+      localStorage.setItem("period_past_predictions", JSON.stringify([...updated]));
+      return updated;
+    });
+  };
+
+  const [isHealthQueryOpen, setIsHealthQueryOpen] = useState(false);
+  const [healthQueryMonth, setHealthQueryMonth] = useState(() => format(new Date(), "yyyy-MM"));
+
+  useEffect(() => {
+    const handleStorage = () => setWater(Number(localStorage.getItem("today_water") || 0));
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const dateStr = format(selectedDay, "yyyy-MM-dd");
+    const saved = localStorage.getItem(`daily_log_${dateStr}`);
+    setDayDetail(saved ? JSON.parse(saved) : []);
+  }, [selectedDay]);
+
+  const togglePeriodDay = (day: Date) => {
+    const dayStr = format(day, "yyyy-MM-dd");
+    setPeriodRecords(prev => prev.includes(dayStr) ? prev.filter(d => d !== dayStr) : [...prev, dayStr].sort());
+  };
+
+  // =================================================================
+  // ?箸?葫撘?嚗誑?敺?甈∪祕????韏瑕??亦?葫?箸?
+  // ?虜靽??葫獢???閬?璅?韐潭?憭?  // =================================================================
+  const getPredictedDays = (): Set<string> => {
+    if (periodRecords.length === 0) return new Set();
+
+    // 撠?????蝯????望?畾菔
+    const sorted = [...periodRecords].sort();
+    const groups: string[][] = [];
+    sorted.forEach((dateStr, i) => {
+      const prev = sorted[i - 1];
+      if (!prev || differenceInDays(new Date(dateStr), new Date(prev)) > 1) {
+        groups.push([dateStr]);
+      } else {
+        groups[groups.length - 1].push(dateStr);
+      }
+    });
+
+    // ??敺??望?畾菔?洵銝憭拍?葫?箸?
+    const lastGroup = groups[groups.length - 1];
+    const lastStart = new Date(lastGroup[0]);
+
+    const predictions = new Set<string>();
+    for (let i = 1; i <= 8; i++) {
+      const nextStart = addDays(lastStart, periodSettings.cycleLength * i);
+      for (let j = 0; j < periodSettings.periodLength; j++) {
+        predictions.add(format(addDays(nextStart, j), "yyyy-MM-dd"));
+      }
+    }
+    return predictions;
+  };
+
+  const predictedDays = getPredictedDays();
+
+  // 瘥活?葫蝯??寡????脣????葫?啣翰??  useEffect(() => {
+  savePastPredictions(predictedDays);
+}, [periodRecords, periodSettings]);
+
+const today = format(new Date(), "yyyy-MM-dd");
+const isPeriod = (d: Date) => periodRecords.includes(format(d, "yyyy-MM-dd"));
+const isPredicted = (d: Date) => predictedDays.has(format(d, "yyyy-MM-dd"));
+const isHistoricPrediction = (d: Date) => {
+  const str = format(d, "yyyy-MM-dd");
+  return pastPredictions.has(str) && !periodRecords.includes(str) && str < today;
+};
+
+// ===================================================
+// ??畾菟望???
+// ===================================================
+const PHASES = [
+  { key: "period", name: "銵???, emoji: " ? 弩", color: "#ff2d55", bg: "rgba(255, 45, 85, 0.1)", desc: "摮悅?扯?? 怨?箄 ? 嚗?蝝偌撟單 ? 雿?? 拙 ?? 暹甇亥矽 ??隡??, tips: ["鋆??菔釭嚗???憿?", "?踹?????", "?舐?望蝺抵圾蝬?"] },
+{ key: "follicular", name: "瞈暹部??, emoji: " ?", color: "#34c759", bg: "rgba(52, 199, 89, 0.1)", desc: "FSH 靽蝙瞈暹部 ??嚗?瞈蝝???蝎曉 ???蝺撓 ? 孵 ???, tips: ["?拙???閬???", "鋆???雁?? B", "?株??瘜?葉"] },
+{ key: "ovulation", name: "???, emoji: " ??, color: "#ff9500", bg: "rgba(255,149,0,0.1)", desc: "蝝洵 12??6 憭抬??萄楷????萄?嚗?瞈蝝?擃陸嚗移???, tips: ["擃澈 ? 航?亙 ? 0.2 ?? .5簞C", " ? 賢葆 ???結 ?", " ? 拙 ? 擃撥摨阡 ???] },
+{
+  key: "luteal", name: "暺???, emoji: " ?? ", color: "#af52de", bg: "rgba(175, 82, 222, 0.1)", desc: "暺?蝝?擃?? 航?箇??瘜Ｗ ??偌 ? 恬 ? PMS嚗?? 拙 ??楨瘣餃 ???, tips: ["皜?暽賢????踹?瘞渲", "鋆???暺概??????", "?芸??豢?隡詨???隡?] },
+  ];
+
+  const getPhaseInfo = () => {
+    if (periodRecords.length === 0) return null;
+    const sorted = [...periodRecords].sort();
+    const groups: string[][] = [];
+    sorted.forEach((dateStr, i) => {
+      const prev = sorted[i - 1];
+      if (!prev || differenceInDays(new Date(dateStr), new Date(prev)) > 1) groups.push([dateStr]);
+      else groups[groups.length - 1].push(dateStr);
+    });
+    const lastGroup = groups[groups.length - 1];
+    const cycleStartDate = new Date(lastGroup[0]);
+    const dayInCycle = differenceInDays(new Date(), cycleStartDate) + 1;
+    const cl = periodSettings.cycleLength;
+    const pl = periodSettings.periodLength;
+    const ovulDay = cl - 14; // ?憭抒??券望?蝯???14 憭?
+    let phaseIdx = 3;
+    let progressInPhase = 1;
+    let totalPhase = 1;
+    if (dayInCycle >= 1 && dayInCycle <= pl) {
+      phaseIdx = 0; progressInPhase = dayInCycle; totalPhase = pl;
+    } else if (dayInCycle <= ovulDay - 1) {
+      phaseIdx = 1; progressInPhase = dayInCycle - pl; totalPhase = Math.max(1, ovulDay - 1 - pl);
+    } else if (dayInCycle <= ovulDay + 2) {
+      phaseIdx = 2; progressInPhase = dayInCycle - (ovulDay - 1); totalPhase = 4;
+    } else if (dayInCycle <= cl) {
+      phaseIdx = 3; progressInPhase = dayInCycle - (ovulDay + 2); totalPhase = Math.max(1, cl - (ovulDay + 2));
+    } else {
+      phaseIdx = 0; progressInPhase = dayInCycle - cl; totalPhase = pl;
+    }
+    return { phase: PHASES[phaseIdx], phaseIdx, dayInCycle: Math.max(1, dayInCycle), progressInPhase: Math.max(1, progressInPhase), totalPhase, cycleLength: cl };
+  };
+
+  const getAnomalyWarning = () => {
+    if (periodRecords.length === 0) return null;
+    const sorted = [...periodRecords].sort();
+    const groups: string[][] = [];
+    sorted.forEach((dateStr, i) => {
+      const prev = sorted[i - 1];
+      if (!prev || differenceInDays(new Date(dateStr), new Date(prev)) > 1) groups.push([dateStr]);
+      else groups[groups.length - 1].push(dateStr);
+    });
+    if (groups.length < 2) return null;
+    const actualCycle = differenceInDays(new Date(groups[groups.length - 1][0]), new Date(groups[groups.length - 2][0]));
+    if (actualCycle > 60) return {
+      level: "danger", msg: `頝?甈∠??歇頞? 60 憭抬?${actualCycle} 憭抬?嚗遣霅啣停?急炎?乓 };
+    if (actualCycle < 21) return { level: "warn", msg: `餈?? 望 ??? ${ actualCycle } 憭抬 ? 甇 ? 虜 21 ?? 5 憭抬 ? 嚗?賢 ?? 准
+  };
+  if (actualCycle > 45) return {
+    level: "warn", msg: `餈??望???${actualCycle} 憭抬?甇?虜 21??5 憭抬?嚗?賢??瑯 };
+    return null;
+  };
+
+  const phaseInfo = getPhaseInfo();
+  const anomaly = getAnomalyWarning();
+  const [expandedPhase, setExpandedPhase] = useState<number | null>(null);
+
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = startOfWeek(monthStart);
+  const endDate = endOfWeek(monthEnd);
+
+  const days = [];
+  let day = startDate;
+  while (day <= endDate) {
+    days.push(day);
+    day = addDays(day, 1);
+  }
+
+  const waterPercent = Math.min(100, (water / waterGoal) * 100);
+
+  return (
+    <div className="flex flex-col min-h-screen bg-[#e6f0ff] overflow-y-auto pb-32 font-sans px-4 relative">
+      <header className="pt-10 pb-6 px-2 flex justify-between items-end">
+        <div>
+          <h1 className="text-2xl font-black text-[#44474b] tracking-tight">?望?蝞∠?</h1>
+          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Predictions & Insights</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-10 h-10 neu-extruded rounded-xl flex items-center justify-center text-stone-400 active:neu-pressed"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+          <button className="w-10 h-10 neu-extruded rounded-xl flex items-center justify-center text-[#4a90e2]" onClick={() => setIsHistoryOpen(true)}><History className="w-5 h-5" /></button>
+        </div>
+      </header>
+
+      {/* Calendar */}
+      <section className="mb-8">
+        <div className="neu-extruded rounded-[45px] p-6 bg-[#e6f0ff]">
+          <div className="flex justify-between items-center mb-8 px-2">
+            <h2 className="text-lg font-black text-[#44474b]">{format(currentDate, "yyyy撟?MM??)}</h2>
+            <div className="flex gap-3">
+              <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="w-9 h-9 neu-extruded rounded-xl flex items-center justify-center text-stone-400 active:neu-pressed transition-all"><ChevronLeft className="w-5 h-5" /></button>
+              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="w-9 h-9 neu-extruded rounded-xl flex items-center justify-center text-stone-400 active:neu-pressed transition-all"><ChevronRight className="w-5 h-5" /></button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 mb-6 text-center">
+            {["??, "銝", "鈭?, "銝?, "??, "鈭?, "??].map(d => (
+              <div key={d} className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{d}</div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-y-5 text-center px-1">
+            {days.map((d) => {
+              const currentMonth = isSameMonth(d, monthStart);
+              const isToday = isSameDay(d, new Date());
+              const selected = isSameDay(d, selectedDay);
+              const period = isPeriod(d);
+              const predicted = isPredicted(d);
+              const historic = isHistoricPrediction(d);
+              // 銝?敺?= 撖阡?璅?鈭?銝????              const irregular = period && !predicted;
+
+              // 憭?璅???芸?摨?蝣箏祕璅? > ?葫獢?> 甇瑕?葫 > 隞予 > ?訾葉 > ?桅?              const outerClass = !currentMonth ? "text-stone-300/30" :
+                predicted ? "border-2 border-dashed border-[#ff2d55]/50" :
+                  historic ? "border-2 border-dashed border-[#ff2d55]/20" :
+                    isToday ? "neu-inset" :
+                      selected ? "bg-[#e6f0ff] ring-2 ring-white/60" :
+                        "";
+
+              return (
+                <div key={d.toISOString()} className="relative flex justify-center items-center">
+                  <motion.div
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => { setSelectedDay(startOfDay(d)); togglePeriodDay(d); }}
+                    className={`w- 11 h - 11 flex flex - col items - center justify - center rounded - 2xl text - sm font - black z - 10 transition - all cursor - pointer relative ${ outerClass } `}
+                  >
+                    {/* 撖阡?璅?撅歹?蝝/蝝怨撖血??? */}
+                    {period && currentMonth && (
+                      <div
+                        className={`absolute inset - 1.5 rounded - xl flex items - center justify - center text - white text - sm font - black ${
+    irregular
+      ? "bg-[#af52de] shadow-[0_4px_12px_rgba(175,82,222,0.4)]"
+      : "bg-[#ff2d55] shadow-[0_4px_12px_rgba(255,45,85,0.4)]"
+  } `}
+                      >
+                        {format(d, "d")}
+                      </div>
+                    )}
+                    {/* ?⊥?閮?憿舐內?交??詨? */}
+                    {!period && (
+                      <span className={`${
+    !currentMonth ? "text-stone-300/30" :
+    predicted ? "text-[#ff2d55]" :
+      historic ? "text-[#ff2d55]/40" :
+        isToday ? "text-[#4a90e2]" :
+          "text-[#44474b]"
+  } `}>{format(d, "d")}</span>
+                    )}
+                  </motion.div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-center flex-wrap gap-4 mt-10 border-t border-white/20 pt-8">
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#ff2d55]" /><span className="text-[10px] font-black text-[#44474b] opacity-50">閬?蝬?</span></div>
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#af52de]" /><span className="text-[10px] font-black text-[#44474b] opacity-50">銝?敺?/span></div>
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-[#ff2d55]" /><span className="text-[10px] font-black text-[#44474b] opacity-50">????/span></div>
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-[#ff2d55]/30" /><span className="text-[10px] font-black text-[#44474b] opacity-50">?暸?皜?/span></div>
+          </div>
+        </div>
+      </section>
+
+      {/* ?望??挾???∠? */}
+      <PhaseCard phaseInfo={phaseInfo} anomaly={anomaly} />
+
+      <section className="__placeholder__">
+
+        {/* ?啣虜霅衣內 */}
+        {anomaly && (
+          <div
+      {/* 週期階段分析卡片 */}
+      <PhaseCard phaseInfo={phaseInfo} anomaly={anomaly} />
+
+      className="w-9 h-9 neu-extruded rounded-xl flex items-center justify-center text-[#4a90e2] active:neu-pressed"
+    >
+      <ClipboardList className="w-5 h-5" />
+    </button>
+  </div>
+
+  <div className="neu-extruded rounded-[40px] p-8 bg-white/20 backdrop-blur-sm border border-white/30">
+    <div className="flex flex-wrap gap-2.5">
+      {dayDetail.length > 0 ? (
+        dayDetail.map(s => (
+          <div key={s} className="px-4 py-2.5 rounded-2xl bg-white/60 border border-white/50 text-[#44474b] text-[11px] font-black shadow-sm flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4a90e2]" />
+            {s}
+          </div>
+        ))
+      ) : (
+        <div className="w-full text-center py-4">
+          <p className="text-[10px] text-stone-400 font-bold tracking-widest leading-none">?嗆?∠畾?閮餌???/p>
+        </div>
+      )}
+    </div>
+
+    {/* 靽桀儔敺?瘞游??郊?脣漲 */}
+    <div className="mt-8 pt-6 border-t border-white/20 flex justify-between items-center">
+      <div className="flex flex-col">
+        <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">隞瘞游???</span>
+        <span className="text-sm font-black text-[#4a90e2] mt-1">{water} / {waterGoal} ml</span>
+      </div>
+      <div className="w-24 h-2.5 bg-[#e6f0ff] neu-inset rounded-full overflow-hidden border border-white/40">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${ waterPercent }% ` }}
+          className="h-full bg-gradient-to-r from-[#4a90e2] to-[#93c5fd] shadow-[0_0_10px_rgba(74,144,226,0.5)]"
+        />
+      </div>
+    </div>
+  </div>
+</section>
+
+{/* Settings Modal (蝘餉?閮剖?) */ }
+<AnimatePresence>
+  {isSettingsOpen && (
+    <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-10 bg-black/10 backdrop-blur-sm">
+      <motion.div
+        initial={{ y: 300, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 300, opacity: 0 }}
+        className="w-full max-w-md neu-extruded rounded-[45px] p-8 bg-[#e6f0ff] relative"
+      >
+        <button
+          onClick={() => setIsSettingsOpen(false)}
+          className="absolute top-6 right-8 w-10 h-10 neu-extruded rounded-2xl flex items-center justify-center text-stone-400"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <h3 className="text-xl font-black text-[#44474b] mb-8 flex items-center gap-3">
+          <Settings className="w-6 h-6 text-[#4a90e2]" />
+          ?望??芸??葫閮剖?
+        </h3>
+
+        <div className="space-y-6">
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-black text-stone-400 uppercase tracking-widest px-1">撟喳??望??瑕漲 (憭?</span>
+            <div className="neu-inset rounded-2xl px-5 py-4 bg-white/40 flex items-center justify-between">
+              <input
+                type="number"
+                className="bg-transparent text-lg font-black text-[#4a90e2] outline-none w-full"
+                value={periodSettings.cycleLength}
+                onChange={(e) => setPeriodSettings({ ...periodSettings, cycleLength: parseInt(e.target.value) || 28 })}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setPeriodSettings((p: any) => ({ ...p, cycleLength: p.cycleLength - 1 }))} className="w-8 h-8 neu-extruded rounded-lg flex items-center justify-center text-stone-400">-</button>
+                <button onClick={() => setPeriodSettings((p: any) => ({ ...p, cycleLength: p.cycleLength + 1 }))} className="w-8 h-8 neu-extruded rounded-lg flex items-center justify-center text-stone-400">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-black text-stone-400 uppercase tracking-widest px-1">撟喳?蝬?憭拇 (憭?</span>
+            <div className="neu-inset rounded-2xl px-5 py-4 bg-white/40 flex items-center justify-between">
+              <input
+                type="number"
+                className="bg-transparent text-lg font-black text-[#4a90e2] outline-none w-full"
+                value={periodSettings.periodLength}
+                onChange={(e) => setPeriodSettings({ ...periodSettings, periodLength: parseInt(e.target.value) || 5 })}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setPeriodSettings((p: any) => ({ ...p, periodLength: p.periodLength - 1 }))} className="w-8 h-8 neu-extruded rounded-lg flex items-center justify-center text-stone-400">-</button>
+                <button onClick={() => setPeriodSettings((p: any) => ({ ...p, periodLength: p.periodLength + 1 }))} className="w-8 h-8 neu-extruded rounded-lg flex items-center justify-center text-stone-400">+</button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsSettingsOpen(false)}
+            className="w-full py-4 bg-[#4a90e2] text-white font-black rounded-3xl shadow-[0_10px_25px_rgba(74,144,226,0.4)] mt-4 active:scale-95 transition-transform"
+          >
+            靽?銝血???          </button>
+        </div>
+      </motion.div>
+    </div>
+  )}
+</AnimatePresence>
+{/* History Modal */ }
+<AnimatePresence>
+  {isHistoryOpen && (
+    <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-10 bg-black/10 backdrop-blur-sm">
+      <motion.div
+        initial={{ y: 300, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 300, opacity: 0 }}
+        className="w-full max-w-md neu-extruded rounded-[45px] p-8 bg-[#e6f0ff] relative max-h-[70vh] flex flex-col"
+      >
+        <button
+          onClick={() => setIsHistoryOpen(false)}
+          className="absolute top-6 right-8 w-10 h-10 neu-extruded rounded-2xl flex items-center justify-center text-stone-400"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <h3 className="text-xl font-black text-[#44474b] mb-8 flex items-center gap-3">
+          <History className="w-6 h-6 text-[#4a90e2]" />
+          甇瑕蝬?蝝??        </h3>
+
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+          {periodRecords.length > 0 ? (
+            [...periodRecords].sort().reduce((acc: string[][], curr, i, arr) => {
+              const prev = arr[i - 1];
+              if (!prev || differenceInDays(new Date(curr), new Date(prev)) > 1) {
+                acc.push([curr]);
+              } else {
+                acc[acc.length - 1].push(curr);
+              }
+              return acc;
+            }, []).reverse().map((period, idx) => (
+              <div key={idx} className="p-5 rounded-3xl neu-extruded-sm bg-white/40 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-[#4a90e2] uppercase tracking-widest mb-1">?望?韏瑕?</p>
+                  <p className="text-sm font-black text-[#44474b]">{format(new Date(period[0]), "yyyy撟?MM?d??)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">??憭拇</p>
+                  <p className="text-sm font-black text-[#44474b]">{period.length} 憭?/p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-10 text-stone-300 font-bold">?桀?撠甇瑕蝝??/div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  )}
+</AnimatePresence>
+
+{/* Health Query Modal - ?亙熒蝝?閰? */ }
+<AnimatePresence>
+  {isHealthQueryOpen && (() => {
+    // 閫?? healthQueryMonth ?踹?嗆?????    const [qYear, qMonth] = healthQueryMonth.split("-").map(Number);
+    const qStart = new Date(qYear, qMonth - 1, 1);
+    const daysInMonth = new Date(qYear, qMonth, 0).getDate();
+    const loggedDays: { date: string; tags: string[] }[] = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = format(new Date(qYear, qMonth - 1, i), "yyyy-MM-dd");
+      const saved = localStorage.getItem(`daily_log_${ dateStr } `);
+      const tags: string[] = saved ? JSON.parse(saved) : [];
+      if (tags.length > 0) loggedDays.push({ date: dateStr, tags });
+    }
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-10 bg-black/10 backdrop-blur-sm">
+        <motion.div
+          initial={{ y: 300, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 300, opacity: 0 }}
+          className="w-full max-w-md neu-extruded rounded-[45px] p-8 bg-[#e6f0ff] relative max-h-[75vh] flex flex-col"
+        >
+          <button
+            onClick={() => setIsHealthQueryOpen(false)}
+            className="absolute top-6 right-8 w-10 h-10 neu-extruded rounded-2xl flex items-center justify-center text-stone-400"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <h3 className="text-xl font-black text-[#44474b] mb-6 flex items-center gap-3">
+            <ClipboardList className="w-6 h-6 text-[#4a90e2]" />
+            ?亙熒蝝?閰?          </h3>
+
+          {/* ?遢?? */}
+          <div className="flex items-center justify-between mb-6 neu-inset rounded-2xl px-4 py-3 bg-white/40">
+            <button
+              onClick={() => {
+                const d = new Date(qYear, qMonth - 2, 1);
+                setHealthQueryMonth(format(d, "yyyy-MM"));
+              }}
+              className="w-8 h-8 neu-extruded rounded-xl flex items-center justify-center text-stone-400"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="font-black text-[#44474b]">{qYear}撟?{String(qMonth).padStart(2, "0")}??/span>
+            <button
+              onClick={() => {
+                const d = new Date(qYear, qMonth, 1);
+                setHealthQueryMonth(format(d, "yyyy-MM"));
+              }}
+              className="w-8 h-8 neu-extruded rounded-xl flex items-center justify-center text-stone-400"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* 蝝??銵?*/}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+            {loggedDays.length > 0 ? (
+              loggedDays.map(({ date, tags }) => (
+                <div key={date} className="p-4 rounded-3xl neu-extruded-sm bg-white/40">
+                  <p className="text-[10px] font-black text-[#4a90e2] uppercase tracking-widest mb-2">
+                    {format(new Date(date), "MM?d??)}
+                    {periodRecords.includes(date) && (
+                      <span className="ml-2 text-[#ff2d55]">??????/span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map(tag => (
+                      <span key={tag} className="px-3 py-1.5 rounded-xl bg-[#e6f0ff] text-[11px] font-black text-[#44474b] neu-extruded-sm">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-stone-300 font-black text-[11px] tracking-widest">?祆??∪摨瑞???/p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    );
+  })()}
+</AnimatePresence>
+    </div >
+  );
+}
+
+// ===========================================================
+// 週期階段分析卡片 (獨立子組件，避免 JSX 引號 escape 問題)
+// ===========================================================
+const PHASES_DEF = [
+  { key: "period",     name: "行經期", emoji: "🩸", color: "#ff2d55", bg: "rgba(255,45,85,0.1)",   desc: "子宮內膜脫落出血，激素水平最低，適合放慢步調充分休息。",      tips: ["補充鐵質（菠菜、豆類）","避免劇烈運動","可用熱敷緩解經痛"] },
+  { key: "follicular", name: "濾泡期", emoji: "🌱", color: "#34c759", bg: "rgba(52,199,89,0.1)",  desc: "FSH 促使濾泡成熟，雌激素上升，精力與情緒逐漸改善。",           tips: ["適合開始規律運動","補充葉酸與維生素 B","皮膚狀況改善中"] },
+  { key: "ovulation",  name: "排卵期", emoji: "✨", color: "#ff9500", bg: "rgba(255,149,0,0.1)",  desc: "卵巢釋放成熟卵子，雌激素達高峰，精力旺盛。",                   tips: ["體溫可能略升 0.2–0.5°C","白帶呈透明拉絲狀","適合高強度運動"] },
+  { key: "luteal",     name: "黃體期", emoji: "🌙", color: "#af52de", bg: "rgba(175,82,222,0.1)", desc: "黃體素升高，可能出現情緒波動或水腫（PMS），適合和緩活動。", tips: ["減少鹽分攝取避免水腫","補充鎂（黑巧克力、堅果）","優先選擇伸展與瑜伽"] },
+] as const;
+
+type PhaseInfo = {
+  phase: typeof PHASES_DEF[number];
+  phaseIdx: number;
+  dayInCycle: number;
+  progressInPhase: number;
+  totalPhase: number;
+  cycleLength: number;
+} | null;
+
+type AnomalyInfo = { level: string; msg: string } | null;
+
+function PhaseCard({ phaseInfo, anomaly }: { phaseInfo: PhaseInfo; anomaly: AnomalyInfo }) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+  if (!phaseInfo) return null;
+
+  return (
+    <section className="mb-6">
+      {anomaly && (
+        <div className={`mb - 4 px - 5 py - 3.5 rounded - 3xl flex items - start gap - 3 ${ anomaly.level === "danger" ? "bg-red-50 border border-red-200" : "bg-orange-50 border border-orange-200" } `}>
+          <span className="text-lg">{anomaly.level === "danger" ? "🚨" : "⚠️"}</span>
+          <p className={`text - [11px] font - black leading - relaxed ${ anomaly.level === "danger" ? "text-red-600" : "text-orange-600" } `}>{anomaly.msg}</p>
+        </div>
+      )}
+
+      <div className="neu-extruded rounded-[40px] p-6 bg-[#e6f0ff]">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-black text-[#44474b]">週期階段分析</h2>
+          <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">第 {phaseInfo.dayInCycle} 天 / {phaseInfo.cycleLength}</span>
+        </div>
+
+        <div className="flex items-center gap-4 p-4 rounded-3xl mb-4" style={{ background: phaseInfo.phase.bg, border: `1.5px solid ${ phaseInfo.phase.color } 22` }}>
+          <span className="text-3xl">{phaseInfo.phase.emoji}</span>
+          <div className="flex-1">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-0.5">目前你在</p>
+            <p className="text-xl font-black" style={{ color: phaseInfo.phase.color }}>{phaseInfo.phase.name}</p>
+            <p className="text-[10px] font-bold text-stone-500 mt-1 leading-relaxed">{phaseInfo.phase.desc}</p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[9px] font-black text-stone-400">{phaseInfo.progressInPhase}/{phaseInfo.totalPhase}</span>
+            <div className="w-1.5 h-12 bg-stone-200 rounded-full overflow-hidden">
+              <div className="w-full rounded-full transition-all duration-700" style={{ height: `${ Math.min(100, (phaseInfo.progressInPhase / phaseInfo.totalPhase) * 100) }% `, background: phaseInfo.phase.color }} />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
+          {PHASES_DEF.map((p, i) => {
+            const isActive = i === phaseInfo.phaseIdx;
+            const isExpanded = expanded === i;
+            return (
+              <div key={p.key}>
+                <button
+                  onClick={() => setExpanded(isExpanded ? null : i)}
+                  className={`w - full p - 2.5 rounded - 2xl flex flex - col items - center gap - 1.5 transition - all ${ isActive ? "neu-extruded-sm" : "opacity-40" } `}
+                  style={isActive ? { background: p.bg, border: `1px solid ${ p.color } 33` } : {}}
+                >
+                  <span className="text-base">{p.emoji}</span>
+                  <span className="text-[9px] font-black text-[#44474b]">{p.name}</span>
+                  {isActive && <div className="w-4 h-0.5 rounded-full" style={{ background: p.color }} />}
+                </button>
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-2">
+                      <div className="p-3 rounded-2xl" style={{ background: p.bg }}>
+                        <p className="text-[10px] font-black mb-2" style={{ color: p.color }}>💡 保健建議</p>
+                        {p.tips.map(tip => (
+                          <p key={tip} className="text-[10px] font-bold text-stone-500 leading-relaxed flex items-start gap-1 mb-1">
+                            <span style={{ color: p.color }}>•</span>{tip}
+                          </p>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
