@@ -22,4 +22,6 @@ export const router = createBrowserRouter([
       { path: "settings/privacy", Component: PrivacySettings },
     ],
   },
-]);
+], {
+  basename: "/Female_menstrual_system"
+});
