@@ -17,7 +17,7 @@ export default defineConfig({
     basicSsl(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: [],
       manifest: {
         name: '女性經期健康系統',
         short_name: '經期健康',
